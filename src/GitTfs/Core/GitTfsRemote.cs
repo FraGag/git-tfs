@@ -613,41 +613,44 @@ namespace GitTfs.Core
             else
             {
                 // If the changeset has created multiple folders, the expected branch folder will not always be the first
-                // so we scan all the changes of type folder to try to detect the first one which is a branch.
+                // so we scan all the changes of type folder to try to detect the first one
+                // which is a branch with the same root branch as the current remote's root branch.
                 // In most cases it will change nothing: the first folder is the good one
-                IBranchObject tfsBranch = null;
-                string tfsPath = null;
+                IBranchObject tfsBranchFound = null;
                 var allBranches = Tfs.GetBranches(true);
+                string rootBranchPathOfThis = BranchTree.GetRootTfsBranchForRemotePath(allBranches, TfsRepositoryPath).Path;
+                var allRelatedBranches = allBranches.Where(b => BranchTree.GetRootTfsBranchForRemotePath(allBranches, b.Path).Path == rootBranchPathOfThis);
                 foreach (var change in parentChangeset.Changes)
                 {
-                    tfsPath = change.Item.ServerItem;
+                    var tfsPath = change.Item.ServerItem;
                     tfsPath = tfsPath.EndsWith("/") ? tfsPath : tfsPath + "/";
 
-                    tfsBranch = allBranches.SingleOrDefault(b => tfsPath.StartsWith(b.Path.EndsWith("/") ? b.Path : b.Path + "/"));
+                    var tfsBranch = allRelatedBranches.SingleOrDefault(b => tfsPath.StartsWith(b.Path.EndsWith("/") ? b.Path : b.Path + "/"));
                     if (tfsBranch != null)
                     {
                         // we found a branch, we stop here
+                        tfsBranchFound = tfsBranch;
                         break;
                     }
                 }
 
-                if (mergeChangeset && tfsBranch != null && Repository.GetConfig(GitTfsConstants.IgnoreNotInitBranches) == true.ToString())
+                if (mergeChangeset && tfsBranchFound != null && Repository.GetConfig(GitTfsConstants.IgnoreNotInitBranches) == true.ToString())
                 {
-                    Trace.TraceInformation("warning: skip not initialized branch for path " + tfsBranch.Path);
+                    Trace.TraceInformation("warning: skip not initialized branch for path " + tfsBranchFound.Path);
                     tfsRemote = null;
-                    omittedParentBranch = tfsBranch.Path + ";C" + parentChangesetId;
+                    omittedParentBranch = tfsBranchFound.Path + ";C" + parentChangesetId;
                 }
-                else if (tfsBranch == null)
+                else if (tfsBranchFound == null)
                 {
-                    Trace.TraceInformation("error: branch not found. Verify that all the folders have been converted to branches (or something else :().\n\tpath {0}", tfsPath);
+                    Trace.TraceInformation("error: branch not found. Verify that all the folders have been converted to branches (or something else :().");
                     tfsRemote = null;
                     omittedParentBranch = ";C" + parentChangesetId;
                 }
                 else
                 {
-                    tfsRemote = InitTfsRemoteOfChangeset(tfsBranch, parentChangeset.ChangesetId, renameResult);
+                    tfsRemote = InitTfsRemoteOfChangeset(tfsBranchFound, parentChangeset.ChangesetId, renameResult);
                     if (tfsRemote == null)
-                        omittedParentBranch = tfsBranch.Path + ";C" + parentChangesetId;
+                        omittedParentBranch = tfsBranchFound.Path + ";C" + parentChangesetId;
                 }
             }
             return tfsRemote;

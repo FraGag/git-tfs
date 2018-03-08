@@ -32,25 +32,8 @@ namespace GitTfs.Core.TfsInterop
             ChildBranches = childBranches;
         }
 
-        public IBranchObject Branch { get; private set; }
-
-        public List<BranchTree> ChildBranches { get; private set; }
-
-        public string Path { get { return Branch.Path; } }
-        public string ParentPath { get { return Branch.ParentPath; } }
-        public bool IsRoot { get { return Branch.IsRoot; } }
-
-        public override string ToString()
+        public static BranchTree GetRootTfsBranchForRemotePath(IEnumerable<IBranchObject> branches, string remoteTfsPath, bool searchExactPath = true)
         {
-            return string.Format("{0} [{1} children]", Path, ChildBranches.Count);
-        }
-    }
-
-    public static class BranchExtensions
-    {
-        public static BranchTree GetRootTfsBranchForRemotePath(this ITfsHelper tfs, string remoteTfsPath, bool searchExactPath = true)
-        {
-            var branches = tfs.GetBranches();
             var branchTrees = branches.Aggregate(new Dictionary<string, BranchTree>(StringComparer.OrdinalIgnoreCase), (dict, branch) => dict.Tap(d => d.Add(branch.Path, new BranchTree(branch))));
             foreach (var branch in branchTrees.Values)
             {
@@ -69,6 +52,27 @@ namespace GitTfs.Core.TfsInterop
                 b.AcceptVisitor(visitor);
                 return visitor.Found;
             });
+        }
+
+        public IBranchObject Branch { get; private set; }
+
+        public List<BranchTree> ChildBranches { get; private set; }
+
+        public string Path { get { return Branch.Path; } }
+        public string ParentPath { get { return Branch.ParentPath; } }
+        public bool IsRoot { get { return Branch.IsRoot; } }
+
+        public override string ToString()
+        {
+            return string.Format("{0} [{1} children]", Path, ChildBranches.Count);
+        }
+    }
+
+    public static class BranchExtensions
+    {
+        public static BranchTree GetRootTfsBranchForRemotePath(this ITfsHelper tfs, string remoteTfsPath, bool searchExactPath = true)
+        {
+            return BranchTree.GetRootTfsBranchForRemotePath(tfs.GetBranches(), remoteTfsPath, searchExactPath);
         }
 
         public static void AcceptVisitor(this BranchTree branch, IBranchTreeVisitor treeVisitor, int level = 0)
